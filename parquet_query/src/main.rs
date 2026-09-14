@@ -7,7 +7,16 @@ use datafusion::prelude::*;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let batches = query("select max(fare_amount) from taxi").await?;
+
+    // Get query from the command line
+    let mut args = std::env::args();
+    let program = args.next().unwrap_or_else(|| "parquet_query".to_string());
+    let Some(q) = args.next() else {
+        eprintln!("Usage: {} \"<query>\"", program);
+        std::process::exit(1);
+    };
+
+    let batches = query(&q).await?;
     println!("{}", pretty_format_batches(&batches)?);
     Ok(())
 }
