@@ -6,11 +6,13 @@ use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{ServerCapabilities, ServerInfo};
 use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
 use rmcp::transport::streamable_http_server::{StreamableHttpServerConfig, StreamableHttpService};
-use rmcp::{tool, tool_handler, tool_router, Json, ServerHandler};
+use rmcp::{tool, tool_handler, tool_router, ErrorData, Json, ServerHandler};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
+
+mod parquet;
 
 // Server will be at /mcp on localhost:8080
 const BIND_ADDRESS: &str = "127.0.0.1:8080";
@@ -47,7 +49,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[derive(Serialize, Deserialize, JsonSchema)]
 struct Table {
     name: String,
-    description: String,
 }
 
 // A single column of a table, with data type
@@ -58,7 +59,7 @@ struct Field {
     nullable: bool,
 }
 
-// A field requested, for which we should return the schema
+// A table name for which list of fields has been requested
 #[derive(Serialize, Deserialize, JsonSchema)]
 struct FieldsRequest {
     table: String,
@@ -87,78 +88,49 @@ impl ParquetServer {
         }
     }
 
-    // Tool for listing tables
-    // TODO: read the table names from the Parquet files in the data directory
+    // Tool for listing tables, read from the Parquet files in the data directory
     #[tool(description = "List the tables that can be queried")]
-    async fn list_tables(&self) -> Json<Vec<Table>> {
-        Json(vec![Table {
-            name: "taxi".to_string(),
-            description: "Yellow taxi trip records".to_string(),
-        }])
+    async fn list_tables(&self) -> Result<Json<Vec<Table>>, ErrorData> {
+        let names = parquet::list_tables()
+            .await
+            .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
+
+        Ok(Json(
+            names.into_iter().map(|name| Table { name }).collect(),
+        ))
     }
 
-    // Tool for listing columns of a table
-    // TODO: read the schema of the requested table instead of returning a fixed one
+    // Tool for listing columns of a table, read from the table's own schema
     #[tool(description = "List the fields (columns) of a table")]
-    async fn list_fields(&self, params: Parameters<FieldsRequest>) -> Json<Vec<Field>> {
-        let _ = params.0.table;
-        Json(vec![
-            Field {
-                name: "trip_id".to_string(),
-                data_type: "BIGINT".to_string(),
-                nullable: false,
-            },
-            Field {
-                name: "pickup_at".to_string(),
-                data_type: "TIMESTAMP".to_string(),
-                nullable: false,
-            },
-            Field {
-                name: "passenger_count".to_string(),
-                data_type: "INTEGER".to_string(),
-                nullable: true,
-            },
-            Field {
-                name: "trip_distance".to_string(),
-                data_type: "DOUBLE".to_string(),
-                nullable: true,
-            },
-            Field {
-                name: "total_amount".to_string(),
-                data_type: "DOUBLE".to_string(),
-                nullable: true,
-            },
-        ])
+    async fn list_fields(
+        &self,
+        params: Parameters<FieldsRequest>,
+    ) -> Result<Json<Vec<Field>>, ErrorData> {
+        let schema = parquet::table_schema(&params.0.table)
+            .await
+            .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
+
+        Ok(Json(
+            schema
+                .fields()
+                .iter()
+                .map(|f| Field {
+                    name: f.name().clone(),
+                    data_type: f.data_type().to_string(),
+                    nullable: f.is_nullable(),
+                })
+                .collect(),
+        ))
     }
 
-    // Tool for executing SQL query and returning result
-    // TODO: run the query with DataFusion and convert the record batches to JSON
+    // Tool for executing SQL query and returning result, run with DataFusion
     #[tool(description = "Execute a SQL query and return the rows as JSON objects")]
-    async fn query(&self, params: Parameters<QueryRequest>) -> Json<Vec<Value>> {
-        let _ = params.0.sql;
-        Json(vec![
-            json!({
-                "trip_id": 1,
-                "pickup_at": "2024-01-01T08:14:00",
-                "passenger_count": 1,
-                "trip_distance": 2.7,
-                "total_amount": 14.30,
-            }),
-            json!({
-                "trip_id": 2,
-                "pickup_at": "2024-01-01T08:22:00",
-                "passenger_count": 3,
-                "trip_distance": 8.1,
-                "total_amount": 36.75,
-            }),
-            json!({
-                "trip_id": 3,
-                "pickup_at": "2024-01-01T09:05:00",
-                "passenger_count": 2,
-                "trip_distance": 1.2,
-                "total_amount": 9.55,
-            }),
-        ])
+    async fn query(&self, params: Parameters<QueryRequest>) -> Result<Json<Vec<Value>>, ErrorData> {
+        let rows = parquet::query_json(&params.0.sql)
+            .await
+            .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
+
+        Ok(Json(rows))
     }
 }
 
