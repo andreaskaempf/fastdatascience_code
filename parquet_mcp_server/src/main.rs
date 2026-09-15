@@ -20,21 +20,21 @@ const MCP_PATH: &str = "/mcp";
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
-    // Define streamable HTTP service
+    // Define rcmp streamable HTTP service
     let service = StreamableHttpService::new(
-        || Ok(ParquetServer::new()),
-        LocalSessionManager::default().into(),
-        StreamableHttpServerConfig::default(),
+        || Ok(ParquetServer::new()),  // Our server, service factory
+        LocalSessionManager::default().into(), // Tracks active client connections
+        StreamableHttpServerConfig::default(),  // Transport layer configuration
     );
 
-    // Define router, using axum
+    // Define axum router to put service under /mcp
     let router = axum::Router::new().nest_service(MCP_PATH, service);
 
     // TCP listner
     let listener = tokio::net::TcpListener::bind(BIND_ADDRESS).await?;
     println!("MCP server listening on http://{}{}", BIND_ADDRESS, MCP_PATH);
 
-    // Start the server
+    // Start the axum server, listening on address and port, and using router
     axum::serve(listener, router)
         .with_graceful_shutdown(async {
             let _ = tokio::signal::ctrl_c().await;
@@ -79,7 +79,7 @@ struct ParquetServer {
     tool_router: ToolRouter<Self>,
 }
 
-// Server is implemented as a tool
+// The methods for the MCP server
 #[tool_router(router = tool_router)]
 impl ParquetServer {
 
@@ -91,9 +91,9 @@ impl ParquetServer {
     }
 
     // Tool for listing tables
+    // TODO: read the table names from the Parquet files in the data directory
     #[tool(description = "List the tables that can be queried")]
     async fn list_tables(&self) -> Json<Vec<Table>> {
-        // TODO: read the table names from the Parquet files in the data directory
         Json(vec![Table {
             name: "taxi".to_string(),
             description: "Yellow taxi trip records".to_string(),
@@ -101,9 +101,9 @@ impl ParquetServer {
     }
 
     // Tool for listing columns of a table
+    // TODO: read the schema of the requested table instead of returning a fixed one
     #[tool(description = "List the fields (columns) of a table")]
     async fn list_fields(&self, params: Parameters<FieldsRequest>) -> Json<Vec<Field>> {
-        // TODO: read the schema of the requested table instead of returning a fixed one
         let _ = params.0.table;
         Json(vec![
             Field {
@@ -135,9 +135,9 @@ impl ParquetServer {
     }
 
     // Tool for executing SQL query and returning result
+    // TODO: run the query with DataFusion and convert the record batches to JSON
     #[tool(description = "Execute a SQL query and return the rows as JSON objects")]
     async fn query(&self, params: Parameters<QueryRequest>) -> Json<Vec<Value>> {
-        // TODO: run the query with DataFusion and convert the record batches to JSON
         let _ = params.0.sql;
         Json(vec![
             json!({
@@ -165,7 +165,7 @@ impl ParquetServer {
     }
 }
 
-// MCP server get info
+// Enable tools for the MCP server, with description to allow the LLM to see what is available
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for ParquetServer {
     fn get_info(&self) -> ServerInfo {
