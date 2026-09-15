@@ -16,30 +16,27 @@ use serde_json::{json, Value};
 const BIND_ADDRESS: &str = "127.0.0.1:8080";
 const MCP_PATH: &str = "/mcp";
 
-// Main function starts the server
+// Main function sets up and starts the server
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
-    // Define rcmp streamable HTTP service
+    // Define the MCP service using rcmp (streamable HTTP service)
     let service = StreamableHttpService::new(
-        || Ok(ParquetServer::new()),  // Our server, service factory
-        LocalSessionManager::default().into(), // Tracks active client connections
+        || Ok(ParquetServer::new()),            // Our server, service factory
+        LocalSessionManager::default().into(),  // Tracks active client connections
         StreamableHttpServerConfig::default(),  // Transport layer configuration
     );
 
     // Define axum router to put service under /mcp
     let router = axum::Router::new().nest_service(MCP_PATH, service);
 
-    // TCP listner
+    // Define tokio TCP listener
     let listener = tokio::net::TcpListener::bind(BIND_ADDRESS).await?;
     println!("MCP server listening on http://{}{}", BIND_ADDRESS, MCP_PATH);
 
-    // Start the axum server, listening on address and port, and using router
-    axum::serve(listener, router)
-        .with_graceful_shutdown(async {
-            let _ = tokio::signal::ctrl_c().await;
-        })
-        .await?;
+    // Start the axum server, listening on address and port, and using router to send all requests
+    // to /mcp path
+    axum::serve(listener, router).await?;
 
     Ok(())
 }
