@@ -1,6 +1,7 @@
-// Streaming (streamable HTTP) MCP server, executes query against 
+// Streaming (streamable HTTP) MCP server, executes queries against 
 // Parquet files in the data directory
 
+// MCP library imports (rmcp)
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{ServerCapabilities, ServerInfo};
@@ -8,10 +9,12 @@ use rmcp::transport::streamable_http_server::session::local::LocalSessionManager
 use rmcp::transport::streamable_http_server::{StreamableHttpServerConfig, StreamableHttpService};
 use rmcp::{tool, tool_handler, tool_router, ErrorData, Json, ServerHandler};
 
+// JSON imports (serde)
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+// Parquet lookup functions in separate file src/parquet.rs
 mod parquet;
 
 // Server will be at /mcp on localhost:8080
@@ -36,8 +39,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = tokio::net::TcpListener::bind(BIND_ADDRESS).await?;
     println!("MCP server listening on http://{}{}", BIND_ADDRESS, MCP_PATH);
 
-    // Start the axum server, listening on address and port, and using router to send all requests
-    // to /mcp path
+    // Start the axum server, listening on address and port, and using router to 
+    // send all requests to /mcp path
     axum::serve(listener, router).await?;
 
     Ok(())
