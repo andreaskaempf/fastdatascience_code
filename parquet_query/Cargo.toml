@@ -1,5 +1,5 @@
 [package]
-name = "parquet_mcp_server"
+name = "parquet_query"
 version = "0.1.0"
 edition = "2021"
 
