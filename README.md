@@ -9,3 +9,5 @@ https://fastdatascience.eu
 Data for the Parquet in Rust entries is for New York City taxi, available
 at https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page
 
+
+https://rustify.rs/articles/rust-for-mcp-model-context-protocol-servers-2026
