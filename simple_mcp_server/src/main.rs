@@ -14,7 +14,10 @@ use rmcp::{ErrorData, Json, ServerHandler, tool, tool_handler, tool_router};
 // JSON imports (serde)
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-//use serde_json::Value;
+
+// For getting file info
+use chrono::{DateTime, Datelike, Utc};
+use std::fs::{metadata, read_dir};
 
 // Server will be at /mcp on localhost:8080
 const BIND_ADDRESS: &str = "127.0.0.1:8080";
@@ -22,8 +25,7 @@ const MCP_PATH: &str = "/mcp";
 
 // Main function sets up and starts the server
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // TODO: why the Box?
+async fn main() -> Result<(), Box<dyn std::error::Error>> { // TODO: why the Box?
 
     // Define the MCP service using rcmp (streamable HTTP service)
     let service = StreamableHttpService::new(
@@ -51,17 +53,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 // The following are schemas used for returning JSON results
 
-// A single file, with information
-#[derive(Serialize, Deserialize, JsonSchema)]
-struct File {
-    name: String,
-    size: u32,
-}
-
-// A file name for which info has been requested
+// Request schema for a file name for which info has been requested
 #[derive(Serialize, Deserialize, JsonSchema)]
 struct FileRequest {
     name: String,
+}
+
+// Information returned about a file
+#[derive(Serialize, Deserialize, JsonSchema)]
+struct FileInfo {
+    name: String,
+    size: u64,
+    modified: String,
+    is_dir: bool,
 }
 
 // MCP server exposing files in the data directory
@@ -81,17 +85,16 @@ impl FileServer {
     }
 
     // Tool for listing files
-    #[tool(description = "List the files in data directory")]
+    #[tool(description = "List all the files in data directory")]
     fn list_files(&self) -> Result<Json<Vec<String>>, ErrorData> {
-        let names = list_files()?;
+        let names = get_file_list("/tmp")?;
         Ok(Json(names))
     }
 
     // Tool for getting information about one file, e.g., name, size, modification date
-    #[tool(description = "Get information about a file, pass the file name")]
-    fn get_file_info(&self, params: Parameters<FileRequest>) -> Result<Json<File>, ErrorData> {
-        let info =
-            file_info(params.0.name).map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
+    #[tool(description = "Get information about a file")]
+    fn file_info(&self, params: Parameters<FileRequest>) -> Result<Json<FileInfo>, ErrorData> {
+        let info = get_file_info(&params.0.name).map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
         Ok(Json(info))
     }
 }
@@ -102,48 +105,19 @@ impl ServerHandler for FileServer {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_instructions(
-                "Query file system. Use list_files to get list of files, and file_info to get information about a file.",
+                "Query file system, use list_files to get list of files, or file_info to get information about a file.",
             )
     }
 }
 
-// TODO: get info about a file
-fn file_info(filename: String) -> Result<File, ErrorData> {
-    Ok(File {
-        name: filename,
-        size: 99,
-    })
-}
-
-fn list_files() -> Result<Vec<String>, ErrorData> {
-    Ok(vec![
-        "file1".to_string(),
-        "file2".to_string(),
-        "file3".to_string(),
-    ]) // TODO
-}
-
-
-/*
-use chrono::{DateTime, Datelike, Utc};
-use std::fs::{metadata, read_dir};
-use std::io::Result;
-
-// Structure for info about a file
-#[derive(Debug)]
-struct FileInfo {
-    name: String,
-    size: u64,
-    modified: String,
-    is_dir: bool,
-}
-
-// Get info for a file
-fn file_info(filename: &str) -> Result<FileInfo> {
-    let info = metadata(filename)?;
+// Utility function to get info for one file, called by the MCP server above.
+// Note that the standard library functions returns std::io::Result, so
+// errors need to be converted to rmcp's ErrorData using internal_data function
+fn get_file_info(filename: &str) -> Result<FileInfo, ErrorData> {
+    let info = metadata(filename).map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
 
     // Convert file date to string
-    let mdate = info.modified()?;
+    let mdate = info.modified().map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
     let dt: DateTime<Utc> = mdate.into();
     let ymd = format!("{}-{:02}-{:02}", dt.year(), dt.month(), dt.day());
 
@@ -155,17 +129,10 @@ fn file_info(filename: &str) -> Result<FileInfo> {
     })
 }
 
-// Return a list of filenames in a directory
-fn list_files(dir: &str) -> Result<Vec<String>> {
-    Ok(read_dir(dir)?
-        .map(|e| {
-            e.unwrap()
-                .path()
-                .to_str() // necessary because filename is OsStr
-                .unwrap()
-                .to_string()
-        })
-        .collect())
+// Utility function to get a list of filenames in a directory, called by the MCP server above.
+// File names from read_dir need to be converted from OsStr to str then to string.
+fn get_file_list(dir: &str) -> Result<Vec<String>, ErrorData> {
+    let files = read_dir(dir).map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
+    Ok(files.map(|f| { f.unwrap().path().to_str().unwrap().to_string() }).collect())
 }
-*/
 

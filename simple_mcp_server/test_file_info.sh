@@ -6,5 +6,5 @@ curl -s -X POST "http://localhost:8080/mcp" \
   -H "Accept: application/json, text/event-stream" \
   -H "Mcp-Session-Id: $MCP_SESSION_ID" \
   -d '{ "jsonrpc": "2.0", "id": 3, "method": "tools/call", 
-        "params": { "name": "get_file_info", "arguments": { "name": "file123" } } }'
+        "params": { "name": "file_info", "arguments": { "name": "/tmp/timelog2.log" } } }'
 
