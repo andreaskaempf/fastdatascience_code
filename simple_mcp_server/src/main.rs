@@ -25,8 +25,7 @@ const MCP_PATH: &str = "/mcp";
 
 // Main function sets up and starts the server
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> { // TODO: why the Box?
-
+async fn main() -> Result<(), std::io::Error> {
     // Define the MCP service using rcmp (streamable HTTP service)
     let service = StreamableHttpService::new(
         || Ok(FileServer::new()),              // Our server, service factory
@@ -84,7 +83,7 @@ impl FileServer {
         }
     }
 
-    // Tool for listing files
+    // Tool for listing files, use /tmp for demo
     #[tool(description = "List all the files in data directory")]
     fn list_files(&self) -> Result<Json<Vec<String>>, ErrorData> {
         let names = get_file_list("/tmp")?;
@@ -94,7 +93,8 @@ impl FileServer {
     // Tool for getting information about one file, e.g., name, size, modification date
     #[tool(description = "Get information about a file")]
     fn file_info(&self, params: Parameters<FileRequest>) -> Result<Json<FileInfo>, ErrorData> {
-        let info = get_file_info(&params.0.name).map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
+        let info = get_file_info(&params.0.name)
+            .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
         Ok(Json(info))
     }
 }
@@ -117,7 +117,9 @@ fn get_file_info(filename: &str) -> Result<FileInfo, ErrorData> {
     let info = metadata(filename).map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
 
     // Convert file date to string
-    let mdate = info.modified().map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
+    let mdate = info
+        .modified()
+        .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
     let dt: DateTime<Utc> = mdate.into();
     let ymd = format!("{}-{:02}-{:02}", dt.year(), dt.month(), dt.day());
 
@@ -133,6 +135,7 @@ fn get_file_info(filename: &str) -> Result<FileInfo, ErrorData> {
 // File names from read_dir need to be converted from OsStr to str then to string.
 fn get_file_list(dir: &str) -> Result<Vec<String>, ErrorData> {
     let files = read_dir(dir).map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
-    Ok(files.map(|f| { f.unwrap().path().to_str().unwrap().to_string() }).collect())
+    Ok(files
+        .map(|f| f.unwrap().path().to_str().unwrap().to_string())
+        .collect())
 }
-
