@@ -9,6 +9,9 @@
 // - Postal addresses
 // - Driver's license numbers (Führerschein)
 // - ID card numbers (Personalausweis)
+// 
+// The data file is taken from https://huggingface.co/datasets/ai4privacy/pii-masking-300k/tree/main/data/train,
+// use the script split_json.py to create a simpler JSON file with just the source and target text.
 
 use std::fs::File;
 use std::io::{BufRead, BufReader, Result};
@@ -56,10 +59,10 @@ fn process_line(text: &str) -> Result<bool> {
 
     // Display results if no match
     if !matches {
-    println!("Source text:\n{}", data.source);
-    println!("\nTarget text:\n{}\n", data.target);
-    println!("\nRedacted text:\n{}\n", redacted);
-    println!("- - - - -\n");
+        println!("Source text:\n{}", data.source);
+        println!("\nTarget text:\n{}\n", data.target);
+        println!("\nRedacted text:\n{}\n", redacted);
+        println!("- - - - -\n");
     }
     Ok(matches)
 }
@@ -118,8 +121,7 @@ static TIME_PATTERNS: LazyLock<Vec<(Regex, &str)>> = LazyLock::new(|| {
 });
 
 // IBAN patterns: 2-letter country code, 2 check digits, then 11-30 alphanumeric
-// characters (total length 15-34). The checksum is not verified, since sample
-// texts often contain made-up IBANs such as DE12345678901234567890.
+// characters (total length 15-34). TODO: verify the checksum.
 static IBAN_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     [
         r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b", // compact       e.g. DE89370400440532013000
@@ -257,12 +259,6 @@ static EMAIL_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
         // asschmoll@tutanota.com, 05pierre-hugues.dunkl@tutanota.com. \w is
         // Unicode-aware, so local parts like dünhaupt@aol.com are covered.
         r"[\w.+%-]+@[\w-]+(?:\.[\w-]+)*\.\p{L}{2,}\b",
-        // Candidates for further formats:
-        // r"[\w.+%-]+@(?:tutanota|gmail|yahoo|aol|outlook|hotmail|protonmail|gmx|web)\b",
-        //                                          // truncated, without TLD, e.g. 41giulyan@tutanota
-        // r"(?i)[\w.+%-]+\s?(?:\(at\)|\[at\]| at )\s?[\w-]+\s?(?:\(dot\)|\[dot\]|\.| dot )\s?\p{L}{2,}\b",
-        //                                          // obfuscated, e.g. max (at) example (dot) com
-        // r"[\w.+%-]+@\[\d{1,3}(?:\.\d{1,3}){3}\]", // IP address as domain, e.g. user@[192.168.1.1]
     ]
     .iter()
     .map(|p| Regex::new(p).expect("invalid email regex"))
@@ -374,7 +370,8 @@ static ID_CARD_PATTERNS: LazyLock<Vec<(Regex, &str)>> = LazyLock::new(|| {
     .collect()
 });
 
-// Identify certain PII elements
+// Main function to take a string, identify various PII elements, and replace
+// them with tokens. Uses lots of regular expressions, so very fast.
 fn redact(text: &str) -> Result<String> {
 
     // Make a copy of the input

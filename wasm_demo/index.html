@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8" />
+    <title>WASM example</title>
+  </head>
+  <body>
+
+    <p>Click me button to say hello:
+        <button id="button1">Button</button>
+    </p>
+
+    <p>Enter text, aaa will be converted:</p>
+    <textarea id="text1" style="width: 100%; height: 200px"></textarea>
+
+    <script type="module">
+
+      // Import from the WASM module and its JavaScript glue
+      import init, { greet, convert } from "./pkg/wasm_demo.js";
+      await init();
+
+      function change_text() {
+        var t = document.getElementById("text1");
+        t.value = convert(t.value);
+      }
+
+      function hello() {
+        alert(greet("Hello from Wasm"));
+      }
+
+      // Attach event handlers to elements (cannot use in-line handlers here)
+      document.getElementById("button1").addEventListener("click", hello);
+      document.getElementById("text1").addEventListener("input", change_text);
+
+    </script>
+
+  </body>
+</html>
