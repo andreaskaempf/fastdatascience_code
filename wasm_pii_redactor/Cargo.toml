@@ -1,0 +1,11 @@
+[package]
+name = "wasm_pii_redactor"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+regex = "1.13.1"
+wasm-bindgen = "0.2.129"

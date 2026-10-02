@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8" />
+    <title>WASM example</title>
+  </head>
+  <body>
+
+    <p>Enter text, PII will be redacted:</p>
+    <textarea id="text1" style="width: 100%; height: 200px"></textarea>
+
+    <script type="module">
+
+      // Import from the WASM module and its JavaScript glue
+      import init, { wasm_redact } from "./pkg/wasm_pii_redactor.js";
+      await init();
+
+      function redact_text() {
+        var t = document.getElementById("text1");
+        t.value = wasm_redact(t.value);
+      }
+
+
+      // Attach event handlers to elements (cannot use in-line handlers here)
+      document.getElementById("text1").addEventListener("input", redact_text);
+
+    </script>
+
+  </body>
+</html>
