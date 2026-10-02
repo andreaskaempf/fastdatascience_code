@@ -5,6 +5,8 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
+use crate::names::redact_names;
+
 // Date patterns, compiled once on first use. Each pattern is surrounded by \b
 // so that e.g. parts of IP addresses or longer digit strings are not matched.
 // Note that these could be more strict by checking numeric values against expected ranges.
@@ -211,9 +213,10 @@ static EMAIL_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
 static ADDRESS_PATTERNS: LazyLock<Vec<(Regex, &str)>> = LazyLock::new(|| {
     [
         // Value after a label, up to the end of the field, e.g. "Straße: Klappenweg",
-        // "postcode": "52477", <city>Magdeburg</city>, **Bundesland:** Bayern
+        // "postcode": "52477", <city>Magdeburg</city>, **Bundesland:** Bayern,
+        // <strong>Stadt:</strong> Halle (an HTML tag may follow the separator)
         (
-            r#"(?P<label>\b(?i:straße|strasse|street|gebäude|building(?:_number)?|hausnummer|postleitzahl|plz|post_?code|postal[_ ]?code|stadt|city|ort|bundesland|state|zweite adresse|zweitadresse|sekundäre adresse|zusätzliche adresse|nebenadresse|zusatzadresse|secondary[_ ]?address|sec_?address)[ \t*"']*[:=>][ \t*"']*)[^"'<>\n*,]*[^"'<>\n*,\s]"#,
+            r#"(?P<label>\b(?i:straße|strasse|street|gebäude|building(?:_number)?|hausnummer|postleitzahl|plz|post_?code|postal[_ ]?code|stadt|city|ort|bundesland|state|zweite adresse|zweitadresse|sekundäre adresse|zusätzliche adresse|nebenadresse|zusatzadresse|secondary[_ ]?address|sec_?address)[ \t*"']*[:=>][ \t*"']*(?:</?[a-z]+>[ \t]*)?)[^"'<>\n*,]*[^"'<>\n*,\s]"#,
             "${label}[ADDRESS]",
         ),
         // Street ending in -straße/-strasse/-str., with optional house number,
@@ -232,7 +235,7 @@ static ADDRESS_PATTERNS: LazyLock<Vec<(Regex, &str)>> = LazyLock::new(|| {
         // Postcode and city directly after a street, e.g. "[ADDRESS], 10115 Berlin",
         // "[ADDRESS] D-79117 Freiburg im Breisgau"
         (
-            r"[ADDRESS],? (?:D-)?\d{5} \p{Lu}[\p{L}-]+(?: (?:im|am|an der|ob der|vor der) \p{Lu}[\p{L}-]+| ?\(\p{Lu}\p{L}+\)|/\p{Lu}\p{L}+)?",
+            r"\[ADDRESS\],? (?:D-)?\d{5} \p{Lu}[\p{L}-]+(?: (?:im|am|an der|ob der|vor der) \p{Lu}[\p{L}-]+| ?\(\p{Lu}\p{L}+\)|/\p{Lu}\p{L}+)?",
             "[ADDRESS]",
         ),
         // Candidates for further formats:
@@ -370,6 +373,10 @@ pub fn redact(text: &str) -> Result<String> {
     for (re, replacement) in ADDRESS_PATTERNS.iter() {
         result = re.replace_all(&result, *replacement).into_owned();
     }
+
+    // Look for names and titles, last, since other PII such as email addresses
+    // or street names would otherwise be taken for names
+    result = redact_names(&result);
 
     // Return altered string
     Ok(result)

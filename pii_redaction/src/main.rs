@@ -9,7 +9,8 @@
 // - Postal addresses
 // - Driver's license numbers (Führerschein)
 // - ID card numbers (Personalausweis)
-// 
+// - First and last names, and titles such as "Herr" or "Dr."
+//
 // The data file is taken from https://huggingface.co/datasets/ai4privacy/pii-masking-300k/tree/main/data/train,
 // use the script split_json.py to create a simpler JSON file with just the source and target text.
 
@@ -18,7 +19,8 @@ use std::io::{BufRead, BufReader, Result};
 
 use serde::{Deserialize, Serialize}; // do NOT use the Result provided by Serde
 
-// Redaction function in separate module
+// Redaction function in separate module, with name detection in its own module
+mod names;
 mod redact;
 use crate::redact::redact;
 
@@ -59,11 +61,11 @@ fn process_line(text: &str) -> Result<bool> {
     let matches = redacted == data.target;
 
     // Display results if no match
-    /*if !matches {
+    if !matches {
         println!("Source text:\n{}", data.source);
         println!("\nTarget text:\n{}\n", data.target);
         println!("\nRedacted text:\n{}\n", redacted);
         println!("- - - - -\n");
-    }*/
+    }
     Ok(matches)
 }
